@@ -2,13 +2,36 @@ import { AuthUser } from "@/types/database";
 import { supabase, isSupabaseConfigured } from "./supabase/client";
 
 const AUTH_STORAGE_KEY = "autohoras_session_user";
+const TECHNICIANS_STORAGE_KEY = "autohoras_workshop_technicians";
 
-export const DEFAULT_PRESET_USERS: AuthUser[] = [
-  { id: "tech-1", name: "Carlos Mendoza", role: "tecnico" },
-  { id: "tech-2", name: "Andrés Silva", role: "tecnico" },
-  { id: "tech-3", name: "Javier Morales", role: "tecnico" },
-  { id: "tech-4", name: "Supervisor Taller", role: "admin" },
-];
+export function getWorkshopTechnicians(): AuthUser[] {
+  if (typeof window === "undefined") return [];
+  const stored = localStorage.getItem(TECHNICIANS_STORAGE_KEY);
+  if (!stored) return [];
+  try {
+    return JSON.parse(stored);
+  } catch {
+    return [];
+  }
+}
+
+export function saveWorkshopTechnicians(techs: AuthUser[]) {
+  if (typeof window !== "undefined") {
+    localStorage.setItem(TECHNICIANS_STORAGE_KEY, JSON.stringify(techs));
+  }
+}
+
+export function addWorkshopTechnician(name: string, role: "tecnico" | "admin" = "tecnico"): AuthUser {
+  const newTech: AuthUser = {
+    id: "tech-" + Date.now(),
+    name: name.trim(),
+    role,
+  };
+  const list = getWorkshopTechnicians();
+  const updated = [...list, newTech];
+  saveWorkshopTechnicians(updated);
+  return newTech;
+}
 
 export function getStoredUser(): AuthUser | null {
   if (typeof window === "undefined") return null;
@@ -53,7 +76,6 @@ export async function loginWithCredentials(email: string, password: string): Pro
     return user;
   }
 
-  // Fallback si no está conectado aún a Supabase
   const user: AuthUser = {
     id: "user-" + Date.now(),
     name: email.split("@")[0] || "Técnico",
@@ -82,7 +104,6 @@ export async function signUpWithCredentials(
 
     if (error) throw error;
 
-    // Si Supabase tiene desactivada la confirmación por correo, la sesión viene activa
     if (data.session && data.user) {
       const user: AuthUser = {
         id: data.user.id,
@@ -91,13 +112,14 @@ export async function signUpWithCredentials(
         role: "tecnico",
       };
       saveStoredUser(user);
+      // Guardar también en la lista de técnicos locales
+      addWorkshopTechnician(name.trim());
       return { user, requiresEmailConfirmation: false };
     }
 
     return { user: null, requiresEmailConfirmation: true };
   }
 
-  // Modo local
   const user: AuthUser = {
     id: "user-" + Date.now(),
     name: name.trim(),
@@ -105,6 +127,7 @@ export async function signUpWithCredentials(
     role: "tecnico",
   };
   saveStoredUser(user);
+  addWorkshopTechnician(name.trim());
   return { user, requiresEmailConfirmation: false };
 }
 

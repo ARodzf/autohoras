@@ -3,78 +3,28 @@ import { TimeLog, TimeLogInsert, FilterPeriod, WorkCategory } from "@/types/data
 
 const LOCAL_STORAGE_KEY = "autohoras_time_logs_v2";
 
-const INITIAL_MOCK_LOGS: TimeLog[] = [
-  {
-    id: "mock-1",
-    vehicle_plate: "ABC-123",
-    order_number: "ORD-101",
-    category: "exterior",
-    duration_minutes: 90, // 1h 30 min
-    duration_hours: 1.5,
-    parts: ["Parachoques Delantero", "Faros"],
-    description: "Desarme para pintura y alineación",
-    technician_name: "Carlos Mendoza",
-    logged_at: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-    created_at: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-  },
-  {
-    id: "mock-2",
-    vehicle_plate: null,
-    order_number: "ORD-102",
-    category: "interior",
-    duration_minutes: 60, // 1h
-    duration_hours: 1.0,
-    parts: ["Paneles de Puerta", "Consola"],
-    description: "Desmontaje completo de molduras internas",
-    technician_name: "Andrés Silva",
-    logged_at: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-    created_at: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-  },
-  {
-    id: "mock-3",
-    vehicle_plate: "XYZ-789",
-    order_number: null,
-    category: "mecanica",
-    duration_minutes: 30, // 30 min
-    duration_hours: 0.5,
-    parts: ["Frenos"],
-    description: "Revisión rápida de pastillas y discos",
-    technician_name: "Carlos Mendoza",
-    logged_at: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
-    created_at: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
-  },
-  {
-    id: "mock-4",
-    vehicle_plate: "MNP-456",
-    order_number: "ORD-105",
-    category: "exterior",
-    duration_minutes: 120, // 2h
-    duration_hours: 2.0,
-    parts: ["Capó", "Guardabarros"],
-    description: "Desarme estético de piezas frontales",
-    technician_name: "Javier Morales",
-    logged_at: new Date().toISOString(),
-    created_at: new Date().toISOString(),
-  },
-];
+const INITIAL_MOCK_LOGS: TimeLog[] = [];
 
 function getLocalLogs(): TimeLog[] {
-  if (typeof window === "undefined") return INITIAL_MOCK_LOGS;
+  if (typeof window === "undefined") return [];
   const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
-  if (!stored) {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(INITIAL_MOCK_LOGS));
-    return INITIAL_MOCK_LOGS;
-  }
+  if (!stored) return [];
   try {
     return JSON.parse(stored);
   } catch {
-    return INITIAL_MOCK_LOGS;
+    return [];
   }
 }
 
 function saveLocalLogs(logs: TimeLog[]) {
   if (typeof window !== "undefined") {
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(logs));
+  }
+}
+
+export function clearLocalCache() {
+  if (typeof window !== "undefined") {
+    localStorage.removeItem(LOCAL_STORAGE_KEY);
   }
 }
 
