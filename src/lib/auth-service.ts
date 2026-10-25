@@ -53,7 +53,7 @@ export async function loginWithCredentials(email: string, password: string): Pro
     return user;
   }
 
-  // Si no hay Supabase configurado, simular autenticación rápida
+  // Fallback si no está conectado aún a Supabase
   const user: AuthUser = {
     id: "user-" + Date.now(),
     name: email.split("@")[0] || "Técnico",
@@ -62,6 +62,50 @@ export async function loginWithCredentials(email: string, password: string): Pro
   };
   saveStoredUser(user);
   return user;
+}
+
+export async function signUpWithCredentials(
+  name: string,
+  email: string,
+  password: string
+): Promise<{ user: AuthUser | null; requiresEmailConfirmation: boolean }> {
+  if (isSupabaseConfigured && supabase) {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          name: name.trim(),
+        },
+      },
+    });
+
+    if (error) throw error;
+
+    // Si Supabase tiene desactivada la confirmación por correo, la sesión viene activa
+    if (data.session && data.user) {
+      const user: AuthUser = {
+        id: data.user.id,
+        name: name.trim(),
+        email: data.user.email,
+        role: "tecnico",
+      };
+      saveStoredUser(user);
+      return { user, requiresEmailConfirmation: false };
+    }
+
+    return { user: null, requiresEmailConfirmation: true };
+  }
+
+  // Modo local
+  const user: AuthUser = {
+    id: "user-" + Date.now(),
+    name: name.trim(),
+    email,
+    role: "tecnico",
+  };
+  saveStoredUser(user);
+  return { user, requiresEmailConfirmation: false };
 }
 
 export async function logout(): Promise<void> {
