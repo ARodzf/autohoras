@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #020617;
-  --foreground: #f8fafc;
+  --background: #09090b;
+  --foreground: #fafafa;
 }
 
 @theme inline {
@@ -19,12 +19,10 @@ body {
   touch-action: manipulation;
 }
 
-/* Soporte para áreas seguras de pantallas con notch o barra gestual */
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom, 1rem);
 }
 
-/* Ocultar barra de scroll para barras de filtros horizontales */
 .scrollbar-none::-webkit-scrollbar {
   display: none;
 }

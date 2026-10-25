@@ -14,7 +14,7 @@ export default function BottomNavigation({ activeTab, onChangeTab }: BottomNavig
   const tabs = [
     {
       id: "entry" as ActiveTab,
-      label: "Registro",
+      label: "Registrar",
       icon: PlusCircle,
     },
     {
@@ -24,13 +24,13 @@ export default function BottomNavigation({ activeTab, onChangeTab }: BottomNavig
     },
     {
       id: "reportes" as ActiveTab,
-      label: "Reportes",
+      label: "Comprobantes",
       icon: FileBarChart2,
     },
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur-lg border-t border-slate-800 pb-safe">
+    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-zinc-950/95 backdrop-blur-xl border-t border-zinc-800/80 pb-safe shadow-2xl">
       <div className="max-w-md mx-auto flex items-center justify-around px-3 py-2">
         {tabs.map((tab) => {
           const Icon = tab.icon;
@@ -41,16 +41,16 @@ export default function BottomNavigation({ activeTab, onChangeTab }: BottomNavig
               onClick={() => {
                 onChangeTab(tab.id);
                 if (typeof window !== "undefined" && window.navigator?.vibrate) {
-                  window.navigator.vibrate(25);
+                  window.navigator.vibrate(20);
                 }
               }}
               className={`flex-1 flex flex-col items-center justify-center py-2 px-3 rounded-2xl transition-all cursor-pointer select-none active:scale-95 ${
                 isActive
-                  ? "text-emerald-400 font-bold bg-slate-800/80"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "text-blue-400 font-bold bg-zinc-900 border border-zinc-800"
+                  : "text-zinc-500 hover:text-zinc-300"
               }`}
             >
-              <Icon className={`w-6 h-6 mb-1 ${isActive ? "stroke-[2.5]" : "stroke-[2]"}`} />
+              <Icon className={`w-5 h-5 mb-1 ${isActive ? "stroke-[2.5]" : "stroke-[2]"}`} />
               <span className="text-[11px] tracking-tight">{tab.label}</span>
             </button>
           );
