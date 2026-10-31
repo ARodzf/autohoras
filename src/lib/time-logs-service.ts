@@ -1,9 +1,7 @@
 import { supabase, isSupabaseConfigured } from "./supabase/client";
-import { TimeLog, TimeLogInsert, FilterPeriod, WorkCategory } from "@/types/database";
+import { TimeLog, TimeLogInsert, FilterPeriod } from "@/types/database";
 
-const LOCAL_STORAGE_KEY = "autohoras_time_logs_v2";
-
-const INITIAL_MOCK_LOGS: TimeLog[] = [];
+const LOCAL_STORAGE_KEY = "autohoras_time_logs_v3";
 
 function getLocalLogs(): TimeLog[] {
   if (typeof window === "undefined") return [];
@@ -22,12 +20,6 @@ function saveLocalLogs(logs: TimeLog[]) {
   }
 }
 
-export function clearLocalCache() {
-  if (typeof window !== "undefined") {
-    localStorage.removeItem(LOCAL_STORAGE_KEY);
-  }
-}
-
 export async function createTimeLog(entry: TimeLogInsert): Promise<TimeLog> {
   const duration_hours = parseFloat((entry.duration_minutes / 60).toFixed(2));
 
@@ -35,11 +27,11 @@ export async function createTimeLog(entry: TimeLogInsert): Promise<TimeLog> {
     const payload = {
       vehicle_plate: entry.vehicle_plate || null,
       order_number: entry.order_number || null,
-      category: entry.category,
       duration_minutes: entry.duration_minutes,
-      parts: entry.parts,
       description: entry.description || null,
       technician_name: entry.technician_name || null,
+      category: entry.category || "general",
+      parts: entry.parts || [],
       logged_at: entry.logged_at || new Date().toISOString(),
       user_id: entry.user_id || null,
     };
@@ -54,17 +46,17 @@ export async function createTimeLog(entry: TimeLogInsert): Promise<TimeLog> {
     return data;
   }
 
-  // Modo LocalStorage
+  // Fallback LocalStorage
   const newLog: TimeLog = {
     id: "local-" + Date.now(),
     vehicle_plate: entry.vehicle_plate || null,
     order_number: entry.order_number || null,
-    category: entry.category,
     duration_minutes: entry.duration_minutes,
     duration_hours,
-    parts: entry.parts,
     description: entry.description || null,
     technician_name: entry.technician_name || null,
+    category: entry.category || "general",
+    parts: entry.parts || [],
     logged_at: entry.logged_at || new Date().toISOString(),
     created_at: new Date().toISOString(),
   };
@@ -98,11 +90,10 @@ export async function getDistinctIdentifiers(): Promise<{ plates: string[]; orde
 export interface FetchFilterOptions {
   searchTerm?: string;
   period?: FilterPeriod;
-  category?: WorkCategory | "all";
 }
 
 export async function fetchLogs(options: FetchFilterOptions = {}): Promise<TimeLog[]> {
-  const { searchTerm = "", period = "all", category = "all" } = options;
+  const { searchTerm = "", period = "all" } = options;
 
   if (isSupabaseConfigured && supabase) {
     let query = supabase
@@ -126,10 +117,6 @@ export async function fetchLogs(options: FetchFilterOptions = {}): Promise<TimeL
       query = query.gte("logged_at", startOfMonth);
     }
 
-    if (category !== "all") {
-      query = query.eq("category", category);
-    }
-
     if (searchTerm.trim()) {
       const term = searchTerm.trim();
       query = query.or(
@@ -148,7 +135,7 @@ export async function fetchLogs(options: FetchFilterOptions = {}): Promise<TimeL
     }));
   }
 
-  // Filtrado en LocalStorage
+  // Filtrado LocalStorage
   let logs = getLocalLogs();
 
   const now = new Date();
@@ -163,10 +150,6 @@ export async function fetchLogs(options: FetchFilterOptions = {}): Promise<TimeL
     logs = logs.filter((l) => new Date(l.logged_at) >= thirtyDaysAgo);
   }
 
-  if (category !== "all") {
-    logs = logs.filter((l) => l.category === category);
-  }
-
   if (searchTerm.trim()) {
     const term = searchTerm.toLowerCase().trim();
     logs = logs.filter(
@@ -174,8 +157,7 @@ export async function fetchLogs(options: FetchFilterOptions = {}): Promise<TimeL
         (l.vehicle_plate && l.vehicle_plate.toLowerCase().includes(term)) ||
         (l.order_number && l.order_number.toLowerCase().includes(term)) ||
         (l.description && l.description.toLowerCase().includes(term)) ||
-        (l.technician_name && l.technician_name.toLowerCase().includes(term)) ||
-        (l.parts && l.parts.some((p) => p.toLowerCase().includes(term)))
+        (l.technician_name && l.technician_name.toLowerCase().includes(term))
     );
   }
 

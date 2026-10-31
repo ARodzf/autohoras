@@ -23,7 +23,7 @@ export default function AppHeader({ currentUser, onLogout }: AppHeaderProps) {
               PRO
             </span>
           </h1>
-          <p className="text-[10px] text-zinc-500 font-medium">Desarme y Registro de Taller</p>
+          <p className="text-[10px] text-zinc-500 font-medium">Registro de Horas en Vehículos</p>
         </div>
       </div>
 

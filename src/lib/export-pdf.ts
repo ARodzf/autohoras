@@ -29,7 +29,10 @@ export function exportLogsToPDF(
   doc.text(`Emisión: ${fechaGeneracion}`, 196, 27, { align: "right" });
 
   // Resumen
-  const totalMinutos = logs.reduce((sum, item) => sum + (item.duration_minutes || item.duration_hours * 60), 0);
+  const totalMinutos = logs.reduce(
+    (sum, item) => sum + (item.duration_minutes || Math.round((item.duration_hours || 0) * 60)),
+    0
+  );
   const totalHoras = (totalMinutos / 60).toFixed(2);
   const totalVehiculos = new Set(
     logs.map((l) => l.vehicle_plate || l.order_number || "Sin ID")
@@ -48,15 +51,13 @@ export function exportLogsToPDF(
   const tableRows = logs.map((log) => {
     const identificador = log.vehicle_plate 
       ? `Placa: ${log.vehicle_plate}` 
-      : `Orden: #${log.order_number}`;
+      : log.order_number 
+      ? `Orden: #${log.order_number}`
+      : "S/P";
 
     const duracionTexto = formatDurationHuman(
-      log.duration_minutes || Math.round(Number(log.duration_hours) * 60)
+      log.duration_minutes || Math.round(Number(log.duration_hours || 0) * 60)
     );
-
-    const catLabel =
-      log.category === "exterior" ? "Exterior (Estética)" :
-      log.category === "interior" ? "Interior" : "Mecánica";
 
     return [
       new Date(log.logged_at).toLocaleDateString("es-ES", {
@@ -66,9 +67,7 @@ export function exportLogsToPDF(
         minute: "2-digit",
       }),
       identificador,
-      catLabel,
       duracionTexto,
-      log.parts && log.parts.length > 0 ? log.parts.join(", ") : "General",
       log.technician_name || "—",
       log.description || "—",
     ];
@@ -76,27 +75,25 @@ export function exportLogsToPDF(
 
   autoTable(doc, {
     startY: 50,
-    head: [["Fecha", "Vehículo / Orden", "Área", "Tiempo", "Piezas Desarmadas / Partes", "Técnico", "Notas"]],
+    head: [["Fecha / Hora", "Vehículo / Orden", "Tiempo Invertido", "Técnico", "Notas / Trabajo"]],
     body: tableRows,
     theme: "striped",
     headStyles: {
       fillColor: [37, 99, 235], // Azul vibrante profesional
       textColor: [255, 255, 255],
       fontStyle: "bold",
-      fontSize: 8.5,
+      fontSize: 9,
     },
     bodyStyles: {
-      fontSize: 8,
+      fontSize: 8.5,
       textColor: [30, 41, 59],
     },
     columnStyles: {
-      0: { cellWidth: 26 },
-      1: { cellWidth: 30, fontStyle: "bold" },
-      2: { cellWidth: 26 },
-      3: { cellWidth: 22, fontStyle: "bold", halign: "center" },
-      4: { cellWidth: 40 },
-      5: { cellWidth: 22 },
-      6: { cellWidth: "auto" },
+      0: { cellWidth: 32 },
+      1: { cellWidth: 35, fontStyle: "bold" },
+      2: { cellWidth: 30, fontStyle: "bold", halign: "center" },
+      3: { cellWidth: 32 },
+      4: { cellWidth: "auto" },
     },
     alternateRowStyles: {
       fillColor: [248, 250, 252],
@@ -112,17 +109,15 @@ export function exportLogsToCSV(
   logs: TimeLog[],
   filename: string = "reporte_horas.csv"
 ) {
-  const headers = ["ID", "Fecha", "Placa", "Orden", "Area", "Tiempo_Texto", "Minutos", "Horas", "Piezas", "Tecnico", "Descripcion"];
+  const headers = ["ID", "Fecha", "Placa", "Orden", "Tiempo_Texto", "Minutos", "Horas", "Tecnico", "Descripcion"];
   const rows = logs.map((log) => [
     log.id,
     new Date(log.logged_at).toLocaleString("es-ES"),
     `"${log.vehicle_plate || ""}"`,
     `"${log.order_number || ""}"`,
-    `"${log.category}"`,
     `"${formatDurationHuman(log.duration_minutes)}"`,
     log.duration_minutes,
     log.duration_hours,
-    `"${(log.parts || []).join("; ")}"`,
     `"${log.technician_name || ""}"`,
     `"${(log.description || "").replace(/"/g, '""')}"`,
   ]);

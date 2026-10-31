@@ -2,11 +2,19 @@ import { AuthUser } from "@/types/database";
 import { supabase, isSupabaseConfigured } from "./supabase/client";
 
 const AUTH_STORAGE_KEY = "autohoras_session_user";
-const TECHNICIANS_STORAGE_KEY = "autohoras_workshop_technicians";
+const LOCAL_USERS_KEY = "autohoras_workshop_users_v2";
 
-export function getWorkshopTechnicians(): AuthUser[] {
+interface StoredWorkshopUser {
+  id: string;
+  username: string;
+  name: string;
+  password: string;
+  role: "tecnico" | "admin";
+}
+
+function getLocalUsers(): StoredWorkshopUser[] {
   if (typeof window === "undefined") return [];
-  const stored = localStorage.getItem(TECHNICIANS_STORAGE_KEY);
+  const stored = localStorage.getItem(LOCAL_USERS_KEY);
   if (!stored) return [];
   try {
     return JSON.parse(stored);
@@ -15,22 +23,10 @@ export function getWorkshopTechnicians(): AuthUser[] {
   }
 }
 
-export function saveWorkshopTechnicians(techs: AuthUser[]) {
+function saveLocalUsers(users: StoredWorkshopUser[]) {
   if (typeof window !== "undefined") {
-    localStorage.setItem(TECHNICIANS_STORAGE_KEY, JSON.stringify(techs));
+    localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(users));
   }
-}
-
-export function addWorkshopTechnician(name: string, role: "tecnico" | "admin" = "tecnico"): AuthUser {
-  const newTech: AuthUser = {
-    id: "tech-" + Date.now(),
-    name: name.trim(),
-    role,
-  };
-  const list = getWorkshopTechnicians();
-  const updated = [...list, newTech];
-  saveWorkshopTechnicians(updated);
-  return newTech;
 }
 
 export function getStoredUser(): AuthUser | null {
@@ -53,82 +49,157 @@ export function saveStoredUser(user: AuthUser | null) {
   }
 }
 
-export async function loginWithQuickProfile(user: AuthUser): Promise<AuthUser> {
-  saveStoredUser(user);
-  return user;
-}
+/**
+ * Iniciar sesión con usuario o correo y contraseña
+ */
+export async function loginWithCredentials(
+  identifier: string,
+  password: string
+): Promise<AuthUser> {
+  const cleanId = identifier.trim().toLowerCase();
+  const cleanPass = password.trim();
 
-export async function loginWithCredentials(email: string, password: string): Promise<AuthUser> {
+  // 1. Intentar autenticar en tabla 'workshop_users' de Supabase (si existe)
   if (isSupabaseConfigured && supabase) {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    if (error) throw error;
-    
+    try {
+      const { data, error } = await supabase
+        .from("workshop_users")
+        .select("*")
+        .eq("username", cleanId)
+        .eq("password", cleanPass)
+        .maybeSingle();
+
+      if (!error && data) {
+        const user: AuthUser = {
+          id: data.id,
+          username: data.username,
+          name: data.name,
+          role: data.role || "tecnico",
+        };
+        saveStoredUser(user);
+        return user;
+      }
+
+      // Si no coincidió o la tabla no existe, y parece un correo válido con @, intentar Supabase Auth
+      if (cleanId.includes("@")) {
+        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+          email: cleanId,
+          password: cleanPass,
+        });
+
+        if (!authError && authData.user) {
+          const user: AuthUser = {
+            id: authData.user.id,
+            username: cleanId,
+            name: authData.user.user_metadata?.name || cleanId.split("@")[0],
+            email: authData.user.email,
+            role: "tecnico",
+          };
+          saveStoredUser(user);
+          return user;
+        }
+      }
+    } catch (err) {
+      console.warn("Consulta Supabase Auth alternativa:", err);
+    }
+  }
+
+  // 2. Fallback a usuarios registrados localmente en este dispositivo
+  const localUsers = getLocalUsers();
+  const found = localUsers.find(
+    (u) => u.username.toLowerCase() === cleanId && u.password === cleanPass
+  );
+
+  if (found) {
     const user: AuthUser = {
-      id: data.user.id,
-      name: data.user.user_metadata?.name || data.user.email?.split("@")[0] || "Técnico",
-      email: data.user.email,
-      role: "tecnico",
+      id: found.id,
+      username: found.username,
+      name: found.name,
+      role: found.role,
     };
     saveStoredUser(user);
     return user;
   }
 
-  const user: AuthUser = {
-    id: "user-" + Date.now(),
-    name: email.split("@")[0] || "Técnico",
-    email,
-    role: "tecnico",
-  };
-  saveStoredUser(user);
-  return user;
+  throw new Error("Usuario o contraseña incorrectos. Verifica tus datos o regístrate.");
 }
 
-export async function signUpWithCredentials(
+/**
+ * Registrar un nuevo técnico con contraseña
+ */
+export async function registerWithCredentials(
   name: string,
-  email: string,
+  identifier: string,
   password: string
-): Promise<{ user: AuthUser | null; requiresEmailConfirmation: boolean }> {
-  if (isSupabaseConfigured && supabase) {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          name: name.trim(),
-        },
-      },
-    });
+): Promise<AuthUser> {
+  const cleanName = name.trim();
+  const cleanId = identifier.trim().toLowerCase();
+  const cleanPass = password.trim();
 
-    if (error) throw error;
-
-    if (data.session && data.user) {
-      const user: AuthUser = {
-        id: data.user.id,
-        name: name.trim(),
-        email: data.user.email,
-        role: "tecnico",
-      };
-      saveStoredUser(user);
-      // Guardar también en la lista de técnicos locales
-      addWorkshopTechnician(name.trim());
-      return { user, requiresEmailConfirmation: false };
-    }
-
-    return { user: null, requiresEmailConfirmation: true };
+  if (!cleanName || !cleanId || !cleanPass) {
+    throw new Error("Por favor completa todos los campos requeridos.");
   }
 
-  const user: AuthUser = {
+  if (cleanPass.length < 4) {
+    throw new Error("La contraseña debe tener al menos 4 caracteres.");
+  }
+
+  // 1. Intentar registrar en la tabla 'workshop_users' de Supabase
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data, error } = await supabase
+        .from("workshop_users")
+        .insert([
+          {
+            username: cleanId,
+            name: cleanName,
+            password: cleanPass,
+            role: "tecnico",
+          },
+        ])
+        .select()
+        .single();
+
+      if (!error && data) {
+        const user: AuthUser = {
+          id: data.id,
+          username: data.username,
+          name: data.name,
+          role: "tecnico",
+        };
+        saveStoredUser(user);
+        return user;
+      }
+    } catch (err) {
+      console.warn("Intento de guardado en workshop_users:", err);
+    }
+  }
+
+  // 2. Si no hay Supabase o la tabla aún no se creó, guardar localmente para no bloquear al usuario
+  const localUsers = getLocalUsers();
+  const exists = localUsers.some((u) => u.username.toLowerCase() === cleanId);
+  if (exists) {
+    throw new Error("Este usuario ya está registrado. Por favor inicia sesión.");
+  }
+
+  const newUser: StoredWorkshopUser = {
     id: "user-" + Date.now(),
-    name: name.trim(),
-    email,
+    username: cleanId,
+    name: cleanName,
+    password: cleanPass,
     role: "tecnico",
   };
-  saveStoredUser(user);
-  addWorkshopTechnician(name.trim());
-  return { user, requiresEmailConfirmation: false };
+
+  saveLocalUsers([...localUsers, newUser]);
+
+  const authUser: AuthUser = {
+    id: newUser.id,
+    username: newUser.username,
+    name: newUser.name,
+    role: newUser.role,
+  };
+  saveStoredUser(authUser);
+  return authUser;
 }
 
 export async function logout(): Promise<void> {
